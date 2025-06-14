@@ -4,77 +4,11 @@ local ActiveZones = {}
 local EntityZones = {}
 local ParkedVehicles = {}
 
--- Functions
-local function spawnParkedVehicles(parkId, vehicles)
-    if not vehicles then return end
-    local spots = Config.Zones[parkId].VehicleSpots
-    if not ParkedVehicles[parkId] then ParkedVehicles[parkId] = {} end
-
-    for _, vehicle in ipairs(vehicles) do
-        local spot = spots[vehicle.spot_id]
-        if spot then
-            local model = GetHashKey(vehicle.model)
-            RequestModel(model)
-            while not HasModelLoaded(model) do
-                Wait(0)
-            end
-
-            local vehEntity = CreateVehicle(model, spot.x, spot.y, spot.z, false, false)
-            SetEntityHeading(vehEntity, spot.w)
-            
-            ParkedVehicles[parkId][vehicle.plate] = {
-                car = vehEntity,
-                plate = vehicle.plate,
-                owner = vehicle.citizenid,
-                model = vehicle.model,
-                mods = vehicle.mods,
-                spotId = vehicle.spot_id
-            }
-
-            QBCore.Functions.SetVehicleProperties(vehEntity, json.decode(vehicle.mods))
-            SetModelAsNoLongerNeeded(model)
-            SetVehicleOnGroundProperly(vehEntity)
-            SetEntityInvincible(vehEntity, true)
-            SetVehicleDoorsLocked(vehEntity, 3)
-            FreezeEntityPosition(vehEntity, true)
-
-            if Config.UseTarget then
-                EntityZones[vehEntity] = exports['qb-target']:AddTargetEntity(vehEntity, {
-                    options = {
-                        {
-                            type = 'client',
-                            event = 'personalparking:client:tryRetrieveVehicle',
-                            icon = 'fas fa-car-side',
-                            label = 'Lấy Xe',
-                            owner = vehicle.citizenid,
-                            plate = vehicle.plate,
-                        }
-                    },
-                    distance = 2.5
-                })
-            end
-        end
-    end
-end
-
-local function despawnParkedVehicles(parkId)
-    if not parkId or not ParkedVehicles[parkId] then return end
-    
-    for _, vehicle in pairs(ParkedVehicles[parkId]) do
-        if DoesEntityExist(vehicle.car) then
-            QBCore.Functions.DeleteVehicle(vehicle.car)
-        end
-        if Config.UseTarget and EntityZones[vehicle.car] then
-            exports['qb-target']:RemoveTargetEntity(vehicle.car)
-            EntityZones[vehicle.car] = nil
-        end
-    end
-    ParkedVehicles[parkId] = {}
-end
-
 -- ==========================================================================================
--- *** HÀM ĐÃ ĐƯỢC THAY ĐỔI ĐỂ TÌM VỊ TRÍ NGẪU NHIÊN ***
+--                              HÀM TIỆN ÍCH
 -- ==========================================================================================
+
+-- Đã di chuyển hàm này lên đây để sửa lỗi
 local function getFreeSpot(parkId)
     local spots = Config.Zones[parkId].VehicleSpots
     local parkedSpots = {}
@@ -101,18 +35,88 @@ local function getFreeSpot(parkId)
     -- Nếu không còn chỗ trống, trả về nil
     return nil
 end
+
+local function spawnParkedVehicles(parkId, vehicles)
+    if not vehicles then return end
+    local spots = Config.Zones[parkId].VehicleSpots
+    if not ParkedVehicles[parkId] then ParkedVehicles[parkId] = {} end
+
+    for _, vehicle in ipairs(vehicles) do
+        -- Lỗi đã được khắc phục vì getFreeSpot() giờ đã được định nghĩa
+        local spotId = getFreeSpot(parkId) 
+        if spotId then
+            local spot = spots[spotId]
+            local model = GetHashKey(vehicle.vehicle)
+            RequestModel(model)
+            while not HasModelLoaded(model) do
+                Wait(0)
+            end
+
+            local vehEntity = CreateVehicle(model, spot.x, spot.y, spot.z, false, false)
+            SetEntityHeading(vehEntity, spot.w)
+            
+            ParkedVehicles[parkId][vehicle.plate] = {
+                car = vehEntity,
+                plate = vehicle.plate,
+                owner = vehicle.citizenid,
+                model = vehicle.vehicle,
+                mods = vehicle.mods,
+                spotId = spotId
+            }
+
+            QBCore.Functions.SetVehicleProperties(vehEntity, json.decode(vehicle.mods))
+            SetModelAsNoLongerNeeded(model)
+            SetVehicleOnGroundProperly(vehEntity)
+            SetEntityInvincible(vehEntity, true)
+            SetVehicleDoorsLocked(vehEntity, 3)
+            FreezeEntityPosition(vehEntity, true)
+
+            if Config.UseTarget then
+                EntityZones[vehEntity] = exports['qb-target']:AddTargetEntity(vehEntity, {
+                    options = {
+                        {
+                            type = 'client',
+                            event = 'personalparking:client:tryRetrieveVehicle',
+                            icon = 'fas fa-car-side',
+                            label = 'Lấy Xe',
+                            owner = vehicle.citizenid,
+                            plate = vehicle.plate,
+                        }
+                    },
+                    distance = 2.5
+                })
+            end
+        else
+            print('PersonalParking: Không tìm thấy vị trí trống để spawn xe ' .. vehicle.plate)
+        end
+    end
+end
+
+local function despawnParkedVehicles(parkId)
+    if not parkId or not ParkedVehicles[parkId] then return end
+    
+    for _, vehicle in pairs(ParkedVehicles[parkId]) do
+        if DoesEntityExist(vehicle.car) then
+            QBCore.Functions.DeleteVehicle(vehicle.car)
+        end
+        if Config.UseTarget and EntityZones[vehicle.car] then
+            exports['qb-target']:RemoveTargetEntity(vehicle.car)
+            EntityZones[vehicle.car] = nil
+        end
+    end
+    ParkedVehicles[parkId] = {}
+end
+
 -- ==========================================================================================
--- *** KẾT THÚC PHẦN THAY ĐỔI ***
+--                                 KHU VỰC VÀ ZONES
 -- ==========================================================================================
 
--- Main Zone Functions
 local function CreateZones()
     local isNearParkingMarker = {}
 
     for parkId, zoneData in pairs(Config.Zones) do
         isNearParkingMarker[parkId] = false
 
-        -- Polyzone lớn để quản lý việc hiển thị/biến mất của các xe
         local pZone = PolyZone:Create(zoneData.PolyZone, {
             name = parkId,
             minZ = zoneData.MinZ,
@@ -133,7 +137,6 @@ local function CreateZones()
             end
         end)
 
-        -- CircleZone nhỏ tại điểm để bắt đầu quá trình đậu xe
         local markerZone = CircleZone:Create(vec3(zoneData.ParkVehicleZone.x, zoneData.ParkVehicleZone.y, zoneData.ParkVehicleZone.z), 3.0, {
             name = 'ParkMarker'..parkId,
             debugPoly = false,
@@ -162,8 +165,6 @@ local function CreateZones()
             end
         end)
 
-        -- *** PHẦN ĐƯỢC THÊM VÀO ĐỂ SỬA LỖI ***
-        -- Tạo các BoxZone cho từng vị trí xe để tương tác nếu không dùng qb-target
         if not Config.UseTarget then
             local inSpotZone = {}
             for spotId, spotCoords in ipairs(zoneData.VehicleSpots) do
@@ -182,7 +183,6 @@ local function CreateZones()
                         CreateThread(function()
                             while inSpotZone[spotId] do
                                 local parkedCarData = nil
-                                -- Tìm xe đang đỗ ở vị trí này
                                 if ParkedVehicles[parkId] then
                                     for _, vehData in pairs(ParkedVehicles[parkId]) do
                                         if vehData.spotId == spotId then
@@ -195,7 +195,6 @@ local function CreateZones()
                                 if parkedCarData then
                                     exports['qb-core']:DrawText('[E] - Lấy Xe', 'left')
                                     if IsControlJustReleased(0, 38) then -- Phím E
-                                        -- Tạo dữ liệu giống như qb-target sẽ gửi
                                         local targetData = {
                                             owner = parkedCarData.owner,
                                             plate = parkedCarData.plate
@@ -218,7 +217,10 @@ local function CreateZones()
     end
 end
 
--- Events
+-- ==========================================================================================
+--                                   SỰ KIỆN (EVENTS)
+-- ==========================================================================================
+
 RegisterNetEvent('personalparking:client:tryParkVehicle', function()
     if not CurrentParkZone then return end
     local ped = PlayerPedId()
@@ -231,23 +233,18 @@ RegisterNetEvent('personalparking:client:tryParkVehicle', function()
     local plate = QBCore.Functions.GetPlate(vehicle)
     QBCore.Functions.TriggerCallback('personalparking:server:checkVehicleOwner', function(isOwner)
         if isOwner then
-            local freeSpot = getFreeSpot(CurrentParkZone)
-            if freeSpot then
-                local vehicleProps = QBCore.Functions.GetVehicleProperties(vehicle)
-                QBCore.Functions.TriggerCallback('personalparking:server:getVehicleModel', function(modelName)
-                    if modelName then
-                        local vehicleData = {
-                            plate = plate,
-                            model = modelName,
-                            mods = vehicleProps
-                        }
-                        TriggerServerEvent('personalparking:server:parkVehicle', CurrentParkZone, freeSpot, vehicleData)
-                        QBCore.Functions.DeleteVehicle(vehicle)
-                    end
-                end, plate)
-            else
-                QBCore.Functions.Notify('Không còn chỗ trống trong bãi đậu xe này.', 'error')
-            end
+            local vehicleProps = QBCore.Functions.GetVehicleProperties(vehicle)
+            QBCore.Functions.TriggerCallback('personalparking:server:getVehicleModel', function(modelName)
+                if modelName then
+                    local vehicleData = {
+                        plate = plate,
+                        model = modelName,
+                        mods = vehicleProps
+                    }
+                    TriggerServerEvent('personalparking:server:parkVehicle', CurrentParkZone, nil, vehicleData)
+                    QBCore.Functions.DeleteVehicle(vehicle)
+                end
+            end, plate)
         else
             QBCore.Functions.Notify('Đây không phải là xe của bạn.', 'error')
         end
@@ -281,20 +278,23 @@ RegisterNetEvent('personalparking:client:refreshVehicles', function(parkId)
     end
 end)
 
--- Threads and resource management
-CreateThread(function()
-    for parkId, zoneData in pairs(Config.Zones) do
-        local blip = AddBlipForCoord(zoneData.ParkVehicleZone.x, zoneData.ParkVehicleZone.y, zoneData.ParkVehicleZone.z)
-        SetBlipSprite(blip, 357) -- Parking blip sprite
-        SetBlipDisplay(blip, 4)
-        SetBlipScale(blip, 0.7)
-        SetBlipAsShortRange(blip, true)
-        SetBlipColour(blip, 2)
-        BeginTextCommandSetBlipName('STRING')
-        AddTextComponentSubstringPlayerName('Bãi Đậu Xe Cá Nhân')
-        EndTextCommandSetBlipName(blip)
-    end
-end)
+-- ==========================================================================================
+--                                   THREADS & RESOURCE
+-- ==========================================================================================
+
+--CreateThread(function()
+--    for parkId, zoneData in pairs(Config.Zones) do
+--        local blip = AddBlipForCoord(zoneData.ParkVehicleZone.x, zoneData.ParkVehicleZone.y, zoneData.ParkVehicleZone.z)
+--        SetBlipSprite(blip, 357)
+--        SetBlipDisplay(blip, 4)
+--        SetBlipScale(blip, 0.7)
+--        SetBlipAsShortRange(blip, true)
+--        SetBlipColour(blip, 2)
+--        BeginTextCommandSetBlipName('STRING')
+--        AddTextComponentSubstringPlayerName('Bãi Đậu Xe Cá Nhân')
+ --       EndTextCommandSetBlipName(blip)
+--    end
+--end)
 
 AddEventHandler('onResourceStart', function(resourceName)
     if GetCurrentResourceName() == resourceName then
