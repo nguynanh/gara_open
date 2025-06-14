@@ -30,22 +30,22 @@ RegisterNetEvent('personalparking:server:parkVehicle', function(parkId, spotId, 
     if Player.Functions.GetMoney('bank') >= parkFee then
         Player.Functions.RemoveMoney('bank', parkFee, 'parking-fee')
 
-        -- Thay đổi: Cập nhật player_vehicles thay vì xóa và chèn vào bảng khác
-        local updated = MySQL.update.await('UPDATE player_vehicles SET garage = ?, state = 1, depotprice = 0 WHERE plate = ? AND citizenid = ?', {
+        -- Thêm vị trí đỗ xe vào dữ liệu mods
+        local mods = json.decode(vehicleData.mods)
+        mods.parking_spot = spotId
+        local newMods = json.encode(mods)
+
+        -- Cập nhật CSDL, bao gồm cả cột mods để lưu vị trí và các tùy chỉnh xe
+        local updated = MySQL.update.await('UPDATE player_vehicles SET garage = ?, state = 1, depotprice = 0, mods = ? WHERE plate = ? AND citizenid = ?', {
             parkId,
+            newMods,
             vehicleData.plate,
             Player.PlayerData.citizenid
         })
 
         if updated > 0 then
-            -- Logic để lưu vị trí đỗ xe. Chúng ta có thể lưu nó trong cột `mods` hoặc một cột mới nếu bạn tùy chỉnh bảng player_vehicles.
-            -- Ở đây, chúng ta sẽ thêm nó vào vehicleData trước khi lưu.
-            -- LƯU Ý: Điều này yêu cầu bạn đảm bảo rằng khi lấy xe ra, bạn phải xóa thông tin này khỏi `mods`.
-            -- Để đơn giản hóa, chúng ta sẽ không lưu vị trí cụ thể trong ví dụ này, xe sẽ xuất hiện ngẫu nhiên khi vào khu vực.
-            -- Nếu muốn lưu vị trí, bạn cần một logic phức tạp hơn để quản lý `mods`.
-
             TriggerClientEvent('QBCore:Notify', src, 'Bạn đã đậu xe với phí là $'..parkFee, 'success')
-            TriggerEvent('qb-log:server:CreateLog', 'personalparking', 'Vehicle Parked', 'green', '**'..Player.PlayerData.name..'** đã đậu xe **'..vehicleData.model..'** (`'..vehicleData.plate..'`) tại **'..parkId..'** với phí $'..parkFee..'.')
+            TriggerEvent('qb-log:server:CreateLog', 'personalparking', 'Vehicle Parked', 'green', '**'..Player.PlayerData.name..'** đã đậu xe **'..vehicleData.model..'** (`'..vehicleData.plate..'`) tại **'..parkId..'** (vị trí '..spotId..') với phí $'..parkFee..'.')
             TriggerClientEvent('personalparking:client:refreshVehicles', -1, parkId)
         else
             Player.Functions.AddMoney('bank', parkFee, 'parking-fee-refund')
@@ -62,20 +62,26 @@ RegisterNetEvent('personalparking:server:retrieveVehicle', function(parkId, vehi
 
     if not Player then return end
 
-    -- Thay đổi: Truy vấn từ player_vehicles
     local parkedVehicle = MySQL.query.await('SELECT * FROM player_vehicles WHERE plate = ? AND citizenid = ? AND garage = ?', { vehiclePlate, Player.PlayerData.citizenid, parkId })
 
     if parkedVehicle and parkedVehicle[1] then
         local veh = parkedVehicle[1]
         
-        -- Thay đổi: Cập nhật trạng thái xe thay vì chèn mới
-        MySQL.update.await('UPDATE player_vehicles SET state = 0, garage = "none" WHERE plate = ?', { veh.plate })
+        -- Xóa thông tin vị trí khỏi mods trước khi trả xe cho người chơi
+        local mods = json.decode(veh.mods)
+        if mods and mods.parking_spot then
+            mods.parking_spot = nil
+        end
+        local newMods = json.encode(mods)
 
-        -- Tạo dữ liệu xe để gửi về client
+        -- Cập nhật CSDL: trả xe về trạng thái "trong garage của người chơi" và lưu lại mods đã được làm sạch
+        MySQL.update.await('UPDATE player_vehicles SET state = 0, garage = "none", mods = ? WHERE plate = ?', { newMods, veh.plate })
+
+        -- Tạo dữ liệu xe để gửi về client với mods đã được làm sạch
         local vehicleData = {
             plate = veh.plate,
             model = veh.vehicle,
-            mods = veh.mods
+            mods = newMods
         }
 
         TriggerClientEvent('personalparking:client:spawnRetrievedVehicle', src, vehicleData)

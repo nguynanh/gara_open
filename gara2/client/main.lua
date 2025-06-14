@@ -8,7 +8,6 @@ local ParkedVehicles = {}
 --                              HÀM TIỆN ÍCH
 -- ==========================================================================================
 
--- Đã di chuyển hàm này lên đây để sửa lỗi
 local function getFreeSpot(parkId)
     local spots = Config.Zones[parkId].VehicleSpots
     local parkedSpots = {}
@@ -19,20 +18,17 @@ local function getFreeSpot(parkId)
     end
 
     local freeSpots = {}
-    -- Thu thập tất cả các vị trí còn trống
     for i = 1, #spots do
         if not parkedSpots[i] then
             table.insert(freeSpots, i)
         end
     end
 
-    -- Nếu có vị trí trống, chọn một vị trí ngẫu nhiên từ danh sách
     if #freeSpots > 0 then
         local randomIndex = math.random(#freeSpots)
         return freeSpots[randomIndex]
     end
 
-    -- Nếu không còn chỗ trống, trả về nil
     return nil
 end
 
@@ -42,52 +38,69 @@ local function spawnParkedVehicles(parkId, vehicles)
     if not ParkedVehicles[parkId] then ParkedVehicles[parkId] = {} end
 
     for _, vehicle in ipairs(vehicles) do
-        -- Lỗi đã được khắc phục vì getFreeSpot() giờ đã được định nghĩa
-        local spotId = getFreeSpot(parkId) 
+        local mods = json.decode(vehicle.mods)
+        local spotId = mods.parking_spot -- Đọc vị trí đã lưu từ mods
+
         if spotId then
+            mods.parking_spot = nil -- Xóa thông tin vị trí khỏi bảng mods trước khi áp dụng
             local spot = spots[spotId]
-            local model = GetHashKey(vehicle.vehicle)
-            RequestModel(model)
-            while not HasModelLoaded(model) do
-                Wait(0)
+
+            local isSpotTaken = false
+            if ParkedVehicles[parkId] then
+                for _, parkedVeh in pairs(ParkedVehicles[parkId]) do
+                    if parkedVeh.spotId == spotId then
+                        isSpotTaken = true
+                        break
+                    end
+                end
             end
 
-            local vehEntity = CreateVehicle(model, spot.x, spot.y, spot.z, false, false)
-            SetEntityHeading(vehEntity, spot.w)
-            
-            ParkedVehicles[parkId][vehicle.plate] = {
-                car = vehEntity,
-                plate = vehicle.plate,
-                owner = vehicle.citizenid,
-                model = vehicle.vehicle,
-                mods = vehicle.mods,
-                spotId = spotId
-            }
+            if spot and not isSpotTaken then
+                local model = GetHashKey(vehicle.vehicle)
+                RequestModel(model)
+                while not HasModelLoaded(model) do
+                    Wait(0)
+                end
 
-            QBCore.Functions.SetVehicleProperties(vehEntity, json.decode(vehicle.mods))
-            SetModelAsNoLongerNeeded(model)
-            SetVehicleOnGroundProperly(vehEntity)
-            SetEntityInvincible(vehEntity, true)
-            SetVehicleDoorsLocked(vehEntity, 3)
-            FreezeEntityPosition(vehEntity, true)
+                local vehEntity = CreateVehicle(model, spot.x, spot.y, spot.z, false, false)
+                SetEntityHeading(vehEntity, spot.w)
+                
+                ParkedVehicles[parkId][vehicle.plate] = {
+                    car = vehEntity,
+                    plate = vehicle.plate,
+                    owner = vehicle.citizenid,
+                    model = vehicle.vehicle,
+                    mods = json.encode(mods), -- Lưu lại mods đã được làm sạch
+                    spotId = spotId
+                }
 
-            if Config.UseTarget then
-                EntityZones[vehEntity] = exports['qb-target']:AddTargetEntity(vehEntity, {
-                    options = {
-                        {
-                            type = 'client',
-                            event = 'personalparking:client:tryRetrieveVehicle',
-                            icon = 'fas fa-car-side',
-                            label = 'Lấy Xe',
-                            owner = vehicle.citizenid,
-                            plate = vehicle.plate,
-                        }
-                    },
-                    distance = 2.5
-                })
+                QBCore.Functions.SetVehicleProperties(vehEntity, mods) -- Áp dụng mods cho xe
+                SetModelAsNoLongerNeeded(model)
+                SetVehicleOnGroundProperly(vehEntity)
+                SetEntityInvincible(vehEntity, true)
+                SetVehicleDoorsLocked(vehEntity, 3)
+                FreezeEntityPosition(vehEntity, true)
+
+                if Config.UseTarget then
+                    EntityZones[vehEntity] = exports['qb-target']:AddTargetEntity(vehEntity, {
+                        options = {
+                            {
+                                type = 'client',
+                                event = 'personalparking:client:tryRetrieveVehicle',
+                                icon = 'fas fa-car-side',
+                                label = 'Lấy Xe',
+                                owner = vehicle.citizenid,
+                                plate = vehicle.plate,
+                            }
+                        },
+                        distance = 2.5
+                    })
+                end
+            else
+                print('PersonalParking: Vị trí '..tostring(spotId)..' cho xe ' .. vehicle.plate .. ' không hợp lệ hoặc đã có xe chiếm.')
             end
         else
-            print('PersonalParking: Không tìm thấy vị trí trống để spawn xe ' .. vehicle.plate)
+            print('PersonalParking: Xe ' .. vehicle.plate .. ' không có vị trí được lưu. Không thể spawn.')
         end
     end
 end
@@ -230,6 +243,12 @@ RegisterNetEvent('personalparking:client:tryParkVehicle', function()
         return
     end
 
+    local spotId = getFreeSpot(CurrentParkZone)
+    if not spotId then
+        QBCore.Functions.Notify('Không còn chỗ trống trong bãi đậu xe này.', 'error')
+        return
+    end
+
     local plate = QBCore.Functions.GetPlate(vehicle)
     QBCore.Functions.TriggerCallback('personalparking:server:checkVehicleOwner', function(isOwner)
         if isOwner then
@@ -239,9 +258,9 @@ RegisterNetEvent('personalparking:client:tryParkVehicle', function()
                     local vehicleData = {
                         plate = plate,
                         model = modelName,
-                        mods = vehicleProps
+                        mods = json.encode(vehicleProps) -- Mã hóa mods thành chuỗi JSON
                     }
-                    TriggerServerEvent('personalparking:server:parkVehicle', CurrentParkZone, nil, vehicleData)
+                    TriggerServerEvent('personalparking:server:parkVehicle', CurrentParkZone, spotId, vehicleData)
                     QBCore.Functions.DeleteVehicle(vehicle)
                 end
             end, plate)
