@@ -1,30 +1,24 @@
--- Thêm vào config.lua
-Config.ParkingLots = {
-    ['LegionSquareParking'] = { -- Đặt một tên định danh cho bãi đỗ xe
-        Name = "♡ʍɛʍeʟ♡ ",
-        ParkingFee = 500,     -- Phí gửi xe ban đầu
-        DailyFee = 100, 
-        Blip = {
-            Coords = vector3(-406.65, 1191.98, 325.64),
-            Sprite = 475, -- Sprite blip bãi đỗ xe
-            Color = 2,
-            Scale = 0.7,
-        },
+Config = Config or {}
 
-           Area = {
-            PolyZone = {
-                vector3(-483.85, 1099.74),
-                vector3(-392.73, 1074.69),
-                vector3(-350.63, 1239.01),
-                vector3(-412.13, 1274.75),
-            },
-            MinZ = 320.0,
-            MaxZ = 340.0
-        },
+Config.UseTarget = GetConvar('UseTarget', 'false') == 'true' -- or true if you prefer qb-target
 
-        -- Các vị trí có thể đỗ xe trưng bày
-        Spots = {
-            vector4(-421.49, 1198.21, 325.22, 231.16),
+Config.Zones = {
+    ["SandyParking"] = {
+        -- BusinessName is no longer needed
+        ParkVehicleZone = vector4(-414.6, 1195.14, 325.64, 153.1), -- Renamed from SellVehicle
+        RetrieveVehicleSpawn = vector4(-396.43, 1191.48, 325.64, 157.0), -- Renamed from BuyVehicle
+
+        PolyZone = {
+            vector2(-483.85, 1099.74),
+            vector2(-392.73, 1074.69),
+            vector2(-350.63, 1239.01),
+            vector2(-412.13, 1274.75)
+        },
+        MinZ = 320.0,
+        MaxZ = 340.0,
+
+        VehicleSpots = {
+            vector4(-422.01, 1198.27, 324.9, 231.81),
             vector4(-420.78, 1202.93, 325.22, 227.58),
             vector4(-419.48, 1207.03, 325.22, 235.33),
             vector4(-418.38, 1210.98, 325.22, 233.21),
