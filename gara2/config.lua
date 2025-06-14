@@ -2,6 +2,9 @@ Config = Config or {}
 
 Config.UseTarget = GetConvar('UseTarget', 'false') == 'true' -- or true if you prefer qb-target
 
+-- *** THÊM DÒNG NÀY ***
+Config.ParkFee = 1000 -- Phí để đậu một chiếc xe trong bãi đậu xe cá nhân
+
 Config.Zones = {
     ["SandyParking"] = {
         -- BusinessName is no longer needed
@@ -44,6 +47,8 @@ Config.Zones = {
             vector4(-403.95, 1218.03, 325.22, 163.27),
             vector4(-404.7, 1237.83, 325.22, 252.64),
             vector4(-398.61, 1235.93, 325.22, 252.69),
+            vector4(-407.16, 1206.33, 325.22, 162.48),
+            vector4(-397.99, 1203.85, 325.22, 164.16),
         }
     }
 }
