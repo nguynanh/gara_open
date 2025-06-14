@@ -66,7 +66,7 @@ CreateThread(function()
         -- Đặt thời gian chờ. Ví dụ: 1 giờ (3600000 ms). Script sẽ kiểm tra mỗi giờ.
         Wait(3600000)
 
-        local parkedVehicles = MySQL.query.await('SELECT id, owner, parking_lot, parked_at FROM display_vehicles', {})
+        local parkedVehicles = MySQL.query.await('SELECT id, owner, parking_lot, UNIX_TIMESTAMP(parked_at) AS parked_timestamp FROM display_vehicles', {})
         if not parkedVehicles then goto continue end
 
         for _, vehicle in ipairs(parkedVehicles) do
@@ -74,7 +74,7 @@ CreateThread(function()
             local dailyFee = Config.ParkingLots[lotName] and Config.ParkingLots[lotName].DailyFee or 0
 
             if dailyFee > 0 then
-                local parkedTime = os.time(vehicle.parked_at)
+                local parkedTime = vehicle.parked_timestamp
                 local currentTime = os.time()
                 local hoursPassed = (currentTime - parkedTime) / 3600
 

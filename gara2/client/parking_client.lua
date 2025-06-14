@@ -102,7 +102,7 @@ CreateThread(function()
                                 if vehData.owner == QBCore.Functions.GetPlayerData().citizenid then
                                     exports['qb-core']:DrawText('[E] - Lấy xe', 'left')
                                     if IsControlJustReleased(0, 38) then
-                                        TriggerServerEvent('parkinglot:server:retrieveVehicle', vehData)
+                                        TriggerServerEvent('parkinglot:server:retrieveVehicle', vehData.plate)
                                     end
                                 end
                                 break
