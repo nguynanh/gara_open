@@ -36,7 +36,7 @@ Config.WearableParts = {
 
 Config.Shops = {
     bennys = {
-        managed = true,
+        managed = false,
         shopLabel = 'Benny\'s Motorworks',
         showBlip = true,
         blipSprite = 72,

@@ -300,13 +300,19 @@ local cosmeticParts = {
     'veh_xenons',
     'veh_tint',
     'veh_plates',
+    'spoiler',
+    'bumper',
 }
 
 for i = 1, #cosmeticParts do
     QBCore.Functions.CreateUseableItem(cosmeticParts[i], function(source, item)
         local Player = QBCore.Functions.GetPlayer(source)
         if not Player then return end
-        if Config.RequireJob and Player.PlayerData.job.type ~= 'mechanic' then return end
+        if Config.RequireJob and Player.PlayerData.job.type ~= 'mechanic' then
+            -- Thêm thông báo nếu không có quyền
+            QBCore.Functions.Notify(source, Lang:t('functions.mechanic'), 'error')
+            return -- Quan trọng: return để dừng lại nếu không có quyền
+        end
         TriggerClientEvent('qb-mechanicjob:client:installCosmetic', source, item.name)
     end)
 end

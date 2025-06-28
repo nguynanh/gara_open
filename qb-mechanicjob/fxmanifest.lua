@@ -22,7 +22,9 @@ client_scripts {
     'client/repair.lua',
     'client/tunerchip.lua',
     'client/cl_nos.lua',
-    'client/cl_preview.lua' -- Thêm tệp preview
+    'client/cl_preview.lua',
+    'client/cl_exterior.lua',
+    'client/cl_interior.lua'  -- Thêm tệp preview
 }
 
 server_scripts {
